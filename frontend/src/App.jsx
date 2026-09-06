@@ -1,122 +1,194 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useState } from "react";
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [file, setFile] = useState(null);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const reviewPDF = async () => {
+    if (!file) {
+      alert("Please select a PDF first.");
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("http://127.0.0.1:8000/review", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to review PDF");
+      }
+
+      const data = await response.json();
+
+      setResult(data);
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong while reviewing the document.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+    <div className="app">
+      <div className="container">
+
+        {/* Header */}
+        <header className="header">
+          <div className="logo">ClauseIQ</div>
+
+          <div className="tagline">
+            Understand what your contract actually says.
+          </div>
+        </header>
+
+        {/* Upload Card */}
+        <section className="upload-card">
+
+          <h1 className="upload-title">
+            Review your legal document
+          </h1>
+
+          <p className="upload-description">
+            Upload a PDF and identify important clauses, obligations, and
+            potential areas of concern.
           </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
 
-      <div className="ticks"></div>
+          <div className="upload-row">
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+            <input
+              className="file-input"
+              type="file"
+              accept=".pdf"
+              disabled={loading}
+              onChange={(event) => {
+                setFile(event.target.files[0]);
+                setResult(null);
+              }}
+            />
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+            <button
+              className="review-button"
+              onClick={reviewPDF}
+              disabled={loading}
+            >
+              {loading ? "Reviewing..." : "Review PDF"}
+            </button>
+
+          </div>
+
+          {/* Loading */}
+          {loading && (
+            <div className="loading-container">
+
+              <div className="loading-text">
+                Reviewing your document...
+              </div>
+
+              <div className="progress-track">
+                <div className="progress-indicator"></div>
+              </div>
+
+              <div className="loading-subtext">
+                This may take a moment while the document is analyzed.
+              </div>
+
+            </div>
+          )}
+
+        </section>
+
+        {/* Results */}
+        {result && result.review && result.review.clauses && (
+          <section className="results">
+
+            <div className="results-header">
+
+              <h2 className="results-title">
+                Review Results
+              </h2>
+
+              <span className="results-count">
+                {result.review.clauses.length} clauses identified
+              </span>
+
+            </div>
+
+            {result.review.clauses.map((clause, index) => (
+
+              <article
+                className="clause-card"
+                key={index}
+              >
+
+                <div className="clause-header">
+
+                  <h3 className="clause-type">
+                    {clause.type}
+                  </h3>
+
+                  <span className="page-number">
+                    Page {clause.page}
+                  </span>
+
+                </div>
+
+                <div className="section">
+
+                  <h4 className="section-title">
+                    Original Clause
+                  </h4>
+
+                  <p className="section-text original-clause">
+                    {clause.original}
+                  </p>
+
+                </div>
+
+                <div className="section">
+
+                  <h4 className="section-title">
+                    Plain English
+                  </h4>
+
+                  <p className="section-text">
+                    {clause.explanation}
+                  </p>
+
+                </div>
+
+                <div className="section">
+
+                  <h4 className="section-title">
+                    Why It Matters
+                  </h4>
+
+                  <p className="section-text">
+                    {clause.why_it_matters}
+                  </p>
+
+                </div>
+
+              </article>
+
+            ))}
+
+          </section>
+        )}
+
+      </div>
+    </div>
+  );
 }
 
-export default App
+export default App;
