@@ -25,30 +25,50 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "llama3.2:3b"
 
 
-# Session used to communicate with Ollama
+# Ollama session
 session = r.Session()
 session.trust_env = False
 
 
 def ask(text):
+
     prompt = """
 You are a legal document reviewer.
 
-Read the following page of a legal document and identify clauses that a normal person might misunderstand, overlook, or that could create important obligations.
+Read the following page of a legal document and identify clauses that a normal person might misunderstand, overlook, or that could create important obligations, restrictions, risks, or consequences.
 
 For each important clause, provide:
 
 1. type
-2. original
-3. explanation
-4. why_it_matters
+2. severity
+3. original
+4. explanation
+5. why_it_matters
+
+Severity must be exactly one of:
+
+HIGH
+MEDIUM
+LOW
+
+Use these rules:
+
+HIGH:
+A clause could create significant financial, legal, contractual, or personal consequences if the person overlooks it.
+
+MEDIUM:
+A clause is important to understand but is unlikely to create major consequences by itself.
+
+LOW:
+A clause is worth knowing but is relatively routine or has limited practical impact.
 
 Return the answer as valid JSON in exactly this format:
 
 {
     "clauses": [
         {
-            "type": "OBLIGATION",
+            "type": "INDEMNIFICATION",
+            "severity": "HIGH",
             "original": "exact clause text",
             "explanation": "plain English explanation",
             "why_it_matters": "why this matters to the person signing the agreement"
@@ -62,10 +82,13 @@ Important rules:
 - Do NOT invent information.
 - Only identify clauses that actually appear in the provided text.
 - Keep the original clause as close to the document text as possible.
+- Do not create duplicate clauses.
+- Severity must be exactly HIGH, MEDIUM, or LOW.
 - If there are no important clauses on this page, return:
-  {
-      "clauses": []
-  }
+
+{
+    "clauses": []
+}
 
 Page content:
 
@@ -78,9 +101,9 @@ Page content:
             "prompt": prompt,
             "stream": False,
             "format": "json",
-            "options" : {
+            "options": {
                 "temperature": 0,
-                "seed" : 42
+                "seed": 42
             }
         }
     )
@@ -105,8 +128,8 @@ async def review_pdf(file: UploadFile = File(...)):
         temp_file.write(contents)
         temp_file_path = temp_file.name
 
-
     try:
+
         # Read PDF
         reader = PdfReader(temp_file_path)
 
@@ -114,32 +137,51 @@ async def review_pdf(file: UploadFile = File(...)):
 
 
         # Analyze each page separately
-        for page_number, page in enumerate(reader.pages, start=1):
+        for page_number, page in enumerate(
+            reader.pages,
+            start=1
+        ):
 
             page_text = page.extract_text() or ""
 
-            # Skip completely empty pages
+            # Skip empty pages
             if not page_text.strip():
                 continue
 
 
-            # Send only this page to AI
+            # Send this page to AI
             result = ask(page_text)
 
+            clauses = result.get(
+                "clauses",
+                []
+            )
 
-            # Get clauses returned by AI
-            clauses = result.get("clauses", [])
 
-
-            # Python assigns the REAL page number
+            # Python assigns the real page number
             for clause in clauses:
 
+                # Make sure severity is valid
+                severity = clause.get(
+                    "severity",
+                    "MEDIUM"
+                ).upper()
+
+                if severity not in [
+                    "HIGH",
+                    "MEDIUM",
+                    "LOW"
+                ]:
+                    severity = "MEDIUM"
+
+                clause["severity"] = severity
+
+                # Real PDF page number
                 clause["page"] = page_number
 
                 all_clauses.append(clause)
 
 
-        # Return final result
         return {
             "filename": file.filename,
             "review": {
@@ -149,5 +191,6 @@ async def review_pdf(file: UploadFile = File(...)):
 
 
     finally:
+
         # Delete temporary PDF
         os.remove(temp_file_path)
