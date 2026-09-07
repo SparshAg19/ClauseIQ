@@ -12,6 +12,32 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 
+// =================================
+// Load editorial font
+// =================================
+
+const loadFonts = () => {
+  if (document.getElementById("clauseiq-fonts")) {
+    return;
+  }
+
+  const link = document.createElement("link");
+
+  link.id = "clauseiq-fonts";
+  link.rel = "stylesheet";
+  link.href =
+    "https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap";
+
+  document.head.appendChild(link);
+};
+
+loadFonts();
+
+
+// =================================
+// Normalize text for PDF matching
+// =================================
+
 function normalizeText(text) {
   return (text || "")
     .toLowerCase()
@@ -20,6 +46,10 @@ function normalizeText(text) {
     .trim();
 }
 
+
+// =================================
+// APP
+// =================================
 
 function App() {
   const [file, setFile] = useState(null);
@@ -36,9 +66,41 @@ function App() {
   const [selectedClause, setSelectedClause] = useState(null);
 
 
-  /* =================================
-     Create temporary PDF URL
-     ================================= */
+  // =================================
+  // Theme management
+  // =================================
+
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("clauseiq-theme");
+
+    return saved || "light";
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      "data-theme",
+      theme
+    );
+
+    localStorage.setItem(
+      "clauseiq-theme",
+      theme
+    );
+  }, [theme]);
+
+
+  const toggleTheme = () => {
+    setTheme((previousTheme) =>
+      previousTheme === "light"
+        ? "dark"
+        : "light"
+    );
+  };
+
+
+  // =================================
+  // Create temporary PDF URL
+  // =================================
 
   useEffect(() => {
     if (!file) {
@@ -56,9 +118,9 @@ function App() {
   }, [file]);
 
 
-  /* =================================
-     File handling
-     ================================= */
+  // =================================
+  // File handling
+  // =================================
 
   const handleFile = (selectedFile) => {
     if (!selectedFile) {
@@ -83,15 +145,16 @@ function App() {
 
     setIsDragging(false);
 
-    const droppedFile = event.dataTransfer.files[0];
+    const droppedFile =
+      event.dataTransfer.files[0];
 
     handleFile(droppedFile);
   };
 
 
-  /* =================================
-     Send PDF to backend
-     ================================= */
+  // =================================
+  // Send PDF to backend
+  // =================================
 
   const reviewPDF = async () => {
     if (!file) {
@@ -117,7 +180,9 @@ function App() {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to review PDF");
+        throw new Error(
+          "Failed to review PDF"
+        );
       }
 
       const data = await response.json();
@@ -125,7 +190,6 @@ function App() {
       setResult(data);
 
     } catch (error) {
-
       console.error(error);
 
       alert(
@@ -133,19 +197,16 @@ function App() {
       );
 
     } finally {
-
       setLoading(false);
-
     }
   };
 
 
-  /* =================================
-     Severity
-     ================================= */
+  // =================================
+  // Severity
+  // =================================
 
   const getSeverityClass = (severity) => {
-
     const value =
       severity?.toUpperCase() || "MEDIUM";
 
@@ -165,12 +226,11 @@ function App() {
   };
 
 
-  /* =================================
-     Clause type
-     ================================= */
+  // =================================
+  // Clause type
+  // =================================
 
   const getClauseClass = (type) => {
-
     const value =
       type?.toLowerCase() || "";
 
@@ -198,12 +258,11 @@ function App() {
   };
 
 
-  /* =================================
-     Apply highlights AFTER PDF renders
-     ================================= */
+  // =================================
+  // Apply highlights after PDF renders
+  // =================================
 
   useEffect(() => {
-
     if (
       !result ||
       viewMode !== "document" ||
@@ -212,32 +271,22 @@ function App() {
       return;
     }
 
-
-    /*
-     * Give react-pdf a moment to finish
-     * creating the text layer.
-     */
-
     const timer = setTimeout(() => {
-
       const clauses =
         result.review?.clauses || [];
-
 
       document
         .querySelectorAll(".pdf-page")
         .forEach((pageElement, pageIndex) => {
-
           const pageNumber =
             pageIndex + 1;
-
 
           const pageClauses =
             clauses.filter(
               (clause) =>
-                Number(clause.page) === pageNumber
+                Number(clause.page) ===
+                pageNumber
             );
-
 
           const textSpans =
             Array.from(
@@ -246,18 +295,14 @@ function App() {
               )
             );
 
-
           if (!textSpans.length) {
             return;
           }
 
 
-          /*
-           * Reset previous highlights.
-           */
+          // Reset previous highlights
 
           textSpans.forEach((span) => {
-
             span.classList.remove(
               "clause-highlight",
               "severity-high",
@@ -268,119 +313,93 @@ function App() {
             span.removeAttribute(
               "data-clause-index"
             );
-
           });
 
 
-          /*
-           * Find each AI clause inside the
-           * PDF text layer.
-           */
+          // Process every clause on this page
 
           pageClauses.forEach((clause) => {
-
             const clauseText =
-              normalizeText(clause.original);
-
+              normalizeText(
+                clause.original
+              );
 
             if (!clauseText) {
               return;
             }
 
 
-            /*
-             * Build one continuous text string
-             * from all PDF text spans.
-             */
+            // Build combined PDF text
 
             let combinedText = "";
 
             const ranges = [];
 
-
             textSpans.forEach((span) => {
-
               const text =
                 normalizeText(
                   span.textContent
                 );
 
-
               if (!text) {
                 return;
               }
 
-
               const start =
                 combinedText.length;
-
 
               if (combinedText.length > 0) {
                 combinedText += " ";
               }
 
-
               combinedText += text;
-
 
               const end =
                 combinedText.length;
-
 
               ranges.push({
                 span,
                 start,
                 end,
               });
-
             });
 
 
-            /*
-             * Find the clause inside the
-             * combined PDF text.
-             */
+            // Find clause in PDF text
 
             const startIndex =
               combinedText.indexOf(
                 clauseText
               );
 
-
             if (startIndex === -1) {
               return;
             }
 
-
             const endIndex =
-              startIndex + clauseText.length;
-
+              startIndex +
+              clauseText.length;
 
             const clauseIndex =
               clauses.indexOf(clause);
 
 
-            /*
-             * Highlight every PDF span that
-             * overlaps the detected clause.
-             */
+            // Highlight matching spans
 
             ranges.forEach((range) => {
-
               const overlaps =
-                range.end > startIndex &&
-                range.start < endIndex;
-
+                range.end >
+                  startIndex &&
+                range.start <
+                  endIndex;
 
               if (!overlaps) {
                 return;
               }
 
-
               range.span.classList.add(
                 "clause-highlight"
               );
-
 
               range.span.classList.add(
                 getSeverityClass(
@@ -388,64 +407,66 @@ function App() {
                 )
               );
 
-
               range.span.dataset.clauseIndex =
-                clauseIndex;
-
+                String(clauseIndex);
             });
-
           });
-
         });
-
     }, 500);
-
 
     return () => {
       clearTimeout(timer);
     };
-
   }, [result, viewMode, numPages]);
 
 
-  /* =================================
-     Highlight click
-     ================================= */
+  // =================================
+  // PDF highlight click
+  // =================================
 
   const handlePdfClick = (event) => {
+    let element = event.target;
 
-    const target =
-      event.target.closest(
-        ".clause-highlight"
-      );
+    // Walk upward through the clicked element's
+    // parents until we find the highlighted span.
 
+    while (
+      element &&
+      element !== event.currentTarget
+    ) {
+      if (
+        element.classList &&
+        element.classList.contains(
+          "clause-highlight"
+        )
+      ) {
+        const index = Number(
+          element.dataset.clauseIndex
+        );
 
-    if (!target) {
-      return;
-    }
+        const clause =
+          result?.review?.clauses?.[index];
 
+        if (clause) {
+          setSelectedClause(clause);
+        }
 
-    const index =
-      Number(
-        target.dataset.clauseIndex
-      );
+        return;
+      }
 
-
-    const clause =
-      result?.review?.clauses?.[index];
-
-
-    if (clause) {
-      setSelectedClause(clause);
+      element = element.parentElement;
     }
   };
 
+
+  // =================================
+  // RENDER
+  // =================================
 
   return (
     <div className="app">
 
       <div className="container">
-
 
         {/* =================================
             HEADER
@@ -466,8 +487,131 @@ function App() {
           </div>
 
           <p className="tagline">
-            Understand what your contract actually says.
+            Understand what your contract
+            actually says.
           </p>
+
+          <button
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            title={`Switch to ${
+              theme === "light"
+                ? "dark"
+                : "light"
+            } mode`}
+          >
+
+            <div
+              className={`theme-toggle-icon ${
+                theme === "light"
+                  ? "active"
+                  : ""
+              }`}
+              aria-hidden="true"
+            >
+
+              <svg
+                className="sun-icon"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="5"
+                />
+
+                <line
+                  x1="12"
+                  y1="1"
+                  x2="12"
+                  y2="3"
+                />
+
+                <line
+                  x1="12"
+                  y1="21"
+                  x2="12"
+                  y2="23"
+                />
+
+                <line
+                  x1="4.22"
+                  y1="4.22"
+                  x2="5.64"
+                  y2="5.64"
+                />
+
+                <line
+                  x1="18.36"
+                  y1="18.36"
+                  x2="19.78"
+                  y2="19.78"
+                />
+
+                <line
+                  x1="1"
+                  y1="12"
+                  x2="3"
+                  y2="12"
+                />
+
+                <line
+                  x1="21"
+                  y1="12"
+                  x2="23"
+                  y2="12"
+                />
+
+                <line
+                  x1="4.22"
+                  y1="19.78"
+                  x2="5.64"
+                  y2="18.36"
+                />
+
+                <line
+                  x1="18.36"
+                  y1="5.64"
+                  x2="19.78"
+                  y2="4.22"
+                />
+              </svg>
+
+            </div>
+
+
+            <div
+              className={`theme-toggle-icon ${
+                theme === "dark"
+                  ? "active"
+                  : ""
+              }`}
+              aria-hidden="true"
+            >
+
+              <svg
+                className="moon-icon"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+
+            </div>
+
+          </button>
 
         </header>
 
@@ -498,12 +642,11 @@ function App() {
               </h1>
 
               <p className="upload-description">
-
-                Upload a legal document and ClauseIQ
-                will identify important obligations,
-                restrictions, and clauses that may
-                deserve your attention.
-
+                Upload a legal document and
+                ClauseIQ will identify important
+                obligations, restrictions, and
+                clauses that may deserve your
+                attention.
               </p>
 
             </div>
@@ -521,13 +664,11 @@ function App() {
               }`}
 
               onDragOver={(event) => {
-
                 event.preventDefault();
 
                 if (!loading) {
                   setIsDragging(true);
                 }
-
               }}
 
               onDragLeave={() => {
@@ -586,11 +727,9 @@ function App() {
               onClick={reviewPDF}
               disabled={loading}
             >
-
               {loading
                 ? "Reviewing document..."
                 : "Review PDF"}
-
             </button>
 
 
@@ -613,16 +752,15 @@ function App() {
 
                 <div className="progress-track">
 
-                  <div className="progress-indicator"></div>
+                  <div className="progress-indicator" />
 
                 </div>
 
 
                 <div className="loading-subtext">
-
-                  ClauseIQ is reading the document
-                  and identifying important clauses.
-
+                  ClauseIQ is reading the
+                  document and identifying
+                  important clauses.
                 </div>
 
               </div>
@@ -641,7 +779,6 @@ function App() {
         {result?.review?.clauses && (
 
           <section className="results">
-
 
             <div className="results-header">
 
@@ -669,7 +806,7 @@ function App() {
             </div>
 
 
-            {/* Document */}
+            {/* Document info */}
 
             <div className="document-info">
 
@@ -704,10 +841,8 @@ function App() {
                 }
 
                 onClick={() => {
-
                   setViewMode("document");
                   setSelectedClause(null);
-
                 }}
               >
                 Document View
@@ -722,10 +857,8 @@ function App() {
                 }
 
                 onClick={() => {
-
                   setViewMode("clauses");
                   setSelectedClause(null);
-
                 }}
               >
                 Clause View
@@ -735,82 +868,67 @@ function App() {
 
 
             {/* =================================
-                PDF
+                PDF VIEW
                 ================================= */}
 
-            {viewMode === "document" &&
-              pdfUrl && (
+            <div
+              className={`pdf-viewer ${
+                viewMode === "document"
+                  ? "active"
+                  : ""
+              }`}
+              onClick={handlePdfClick}
+            >
 
-                <div
-                  className="pdf-viewer"
-                  onClick={handlePdfClick}
-                >
+              <Document
+                file={pdfUrl}
 
-                  <Document
-                    file={pdfUrl}
+                onLoadSuccess={({ numPages }) => {
+                  setNumPages(numPages);
+                }}
 
-                    onLoadSuccess={({
-                      numPages
-                    }) => {
+                onLoadError={(error) => {
+                  console.error(
+                    "PDF loading error:",
+                    error
+                  );
+                }}
+              >
 
-                      setNumPages(numPages);
+                {Array.from(
+                  new Array(numPages || 0),
+                  (_, index) => {
 
-                    }}
+                    const pageNumber =
+                      index + 1;
 
-                    onLoadError={(error) => {
+                    return (
 
-                      console.error(
-                        "PDF loading error:",
-                        error
-                      );
+                      <div
+                        className="pdf-page"
+                        key={`page_${pageNumber}`}
+                      >
 
-                    }}
-                  >
+                        <Page
+                          pageNumber={pageNumber}
+                          width={800}
+                          renderTextLayer={true}
+                          renderAnnotationLayer={true}
+                        />
 
-                    {Array.from(
-                      new Array(numPages),
-                      (_, index) => {
+                      </div>
 
-                        const pageNumber =
-                          index + 1;
+                    );
+                  }
+                )}
 
+              </Document>
 
-                        return (
-
-                          <div
-                            className="pdf-page"
-                            key={
-                              `page_${pageNumber}`
-                            }
-                          >
-
-                            <Page
-                              pageNumber={
-                                pageNumber
-                              }
-
-                              width={800}
-
-                              renderTextLayer={true}
-                              renderAnnotationLayer={true}
-                            />
-
-                          </div>
-
-                        );
-
-                      }
-                    )}
-
-                  </Document>
-
-                </div>
-
-              )}
+            </div>
 
 
             {/* =================================
-                POPUP
+                CLAUSE POPUP
                 ================================= */}
 
             {selectedClause && (
@@ -826,9 +944,11 @@ function App() {
                     </div>
 
                     <div
-                      className={`severity-badge ${getSeverityClass(
-                        selectedClause.severity
-                      )}`}
+                      className={`severity-badge ${
+                        getSeverityClass(
+                          selectedClause.severity
+                        )
+                      }`}
                     >
                       {selectedClause.severity}
                     </div>
@@ -844,6 +964,19 @@ function App() {
                   >
                     ×
                   </button>
+
+                </div>
+
+
+                <div className="popup-section">
+
+                  <div className="popup-title">
+                    Original Clause
+                  </div>
+
+                  <p>
+                    {selectedClause.original}
+                  </p>
 
                 </div>
 
@@ -882,110 +1015,116 @@ function App() {
                 CLAUSE VIEW
                 ================================= */}
 
-            {viewMode === "clauses" && (
+            <div
+              className={`clauses ${
+                viewMode === "clauses"
+                  ? "active"
+                  : ""
+              }`}
+            >
 
-              <div className="clauses">
+              {result.review.clauses.map(
+                (clause, index) => (
 
-                {result.review.clauses.map(
-                  (clause, index) => (
+                  <article
+                    className="clause-card"
+                    key={index}
+                  >
 
-                    <article
-                      className="clause-card"
-                      key={index}
-                    >
+                    <div className="clause-header">
 
-                      <div className="clause-header">
+                      <div className="clause-title-row">
 
-                        <div className="clause-title-row">
-
-                          <span className="clause-number">
-                            {String(
-                              index + 1
-                            ).padStart(2, "0")}
-                          </span>
-
-                          <h3 className="clause-type">
-                            {clause.type}
-                          </h3>
-
-                        </div>
-
-
-                        <span className="page-number">
-                          Page {clause.page}
+                        <span className="clause-number">
+                          {String(
+                            index + 1
+                          ).padStart(2, "0")}
                         </span>
 
-                      </div>
-
-
-                      <div className="severity-row">
-
-                        <span
-                          className={`severity-badge ${getSeverityClass(
-                            clause.severity
-                          )}`}
-                        >
-                          {clause.severity}
-                        </span>
-
-
-                        <span
-                          className={`clause-badge ${getClauseClass(
-                            clause.type
-                          )}`}
-                        >
+                        <h3 className="clause-type">
                           {clause.type}
-                        </span>
+                        </h3>
 
                       </div>
 
 
-                      <div className="section">
+                      <span className="page-number">
+                        Page {clause.page}
+                      </span>
 
-                        <h4 className="section-title">
-                          Original Clause
-                        </h4>
+                    </div>
 
-                        <div className="original-clause">
-                          {clause.original}
-                        </div>
 
+                    <div className="severity-row">
+
+                      <span
+                        className={`severity-badge ${
+                          getSeverityClass(
+                            clause.severity
+                          )
+                        }`}
+                      >
+                        {clause.severity}
+                      </span>
+
+
+                      <span
+                        className={`clause-badge ${
+                          getClauseClass(
+                            clause.type
+                          )
+                        }`}
+                      >
+                        {clause.type}
+                      </span>
+
+                    </div>
+
+
+                    <div className="section">
+
+                      <h4 className="section-title">
+                        Original Clause
+                      </h4>
+
+                      <div className="original-clause">
+                        {clause.original}
                       </div>
 
-
-                      <div className="section">
-
-                        <h4 className="section-title">
-                          Plain English
-                        </h4>
-
-                        <p className="section-text">
-                          {clause.explanation}
-                        </p>
-
-                      </div>
+                    </div>
 
 
-                      <div className="section why-section">
+                    <div className="section">
 
-                        <h4 className="section-title">
-                          Why It Matters
-                        </h4>
+                      <h4 className="section-title">
+                        Plain English
+                      </h4>
 
-                        <p className="section-text">
-                          {clause.why_it_matters}
-                        </p>
+                      <p className="section-text">
+                        {clause.explanation}
+                      </p>
 
-                      </div>
+                    </div>
 
-                    </article>
 
-                  )
-                )}
+                    <div className="section why-section">
 
-              </div>
+                      <h4 className="section-title">
+                        Why It Matters
+                      </h4>
 
-            )}
+                      <p className="section-text">
+                        {clause.why_it_matters}
+                      </p>
+
+                    </div>
+
+                  </article>
+
+                )
+              )}
+
+            </div>
 
           </section>
 
