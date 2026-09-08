@@ -12,9 +12,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 
-// =================================
+// =========================================
 // Load editorial font
-// =================================
+// =========================================
 
 const loadFonts = () => {
   if (document.getElementById("clauseiq-fonts")) {
@@ -34,9 +34,9 @@ const loadFonts = () => {
 loadFonts();
 
 
-// =================================
-// Normalize text for PDF matching
-// =================================
+// =========================================
+// Normalize PDF text
+// =========================================
 
 function normalizeText(text) {
   return (text || "")
@@ -47,9 +47,9 @@ function normalizeText(text) {
 }
 
 
-// =================================
+// =========================================
 // APP
-// =================================
+// =========================================
 
 function App() {
   const [file, setFile] = useState(null);
@@ -65,42 +65,31 @@ function App() {
 
   const [selectedClause, setSelectedClause] = useState(null);
 
-
-  // =================================
-  // Theme management
-  // =================================
-
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem("clauseiq-theme");
-
-    return saved || "light";
+    return localStorage.getItem("clauseiq-theme") || "light";
   });
 
-  useEffect(() => {
-    document.documentElement.setAttribute(
-      "data-theme",
-      theme
-    );
 
-    localStorage.setItem(
-      "clauseiq-theme",
-      theme
-    );
+  // =========================================
+  // Theme
+  // =========================================
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("clauseiq-theme", theme);
   }, [theme]);
 
 
   const toggleTheme = () => {
     setTheme((previousTheme) =>
-      previousTheme === "light"
-        ? "dark"
-        : "light"
+      previousTheme === "light" ? "dark" : "light"
     );
   };
 
 
-  // =================================
+  // =========================================
   // Create temporary PDF URL
-  // =================================
+  // =========================================
 
   useEffect(() => {
     if (!file) {
@@ -118,9 +107,9 @@ function App() {
   }, [file]);
 
 
-  // =================================
+  // =========================================
   // File handling
-  // =================================
+  // =========================================
 
   const handleFile = (selectedFile) => {
     if (!selectedFile) {
@@ -145,16 +134,19 @@ function App() {
 
     setIsDragging(false);
 
-    const droppedFile =
-      event.dataTransfer.files[0];
+    if (loading) {
+      return;
+    }
+
+    const droppedFile = event.dataTransfer.files[0];
 
     handleFile(droppedFile);
   };
 
 
-  // =================================
+  // =========================================
   // Send PDF to backend
-  // =================================
+  // =========================================
 
   const reviewPDF = async () => {
     if (!file) {
@@ -180,35 +172,30 @@ function App() {
       );
 
       if (!response.ok) {
-        throw new Error(
-          "Failed to review PDF"
-        );
+        throw new Error("Failed to review PDF");
       }
 
       const data = await response.json();
 
       setResult(data);
-
     } catch (error) {
       console.error(error);
 
       alert(
         "Something went wrong while reviewing the document."
       );
-
     } finally {
       setLoading(false);
     }
   };
 
 
-  // =================================
-  // Severity
-  // =================================
+  // =========================================
+  // Severity class
+  // =========================================
 
   const getSeverityClass = (severity) => {
-    const value =
-      severity?.toUpperCase() || "MEDIUM";
+    const value = severity?.toUpperCase() || "MEDIUM";
 
     if (value === "HIGH") {
       return "severity-high";
@@ -226,13 +213,12 @@ function App() {
   };
 
 
-  // =================================
-  // Clause type
-  // =================================
+  // =========================================
+  // Clause type class
+  // =========================================
 
   const getClauseClass = (type) => {
-    const value =
-      type?.toLowerCase() || "";
+    const value = type?.toLowerCase() || "";
 
     if (value.includes("obligation")) {
       return "badge-obligation";
@@ -258,9 +244,9 @@ function App() {
   };
 
 
-  // =================================
-  // Apply highlights after PDF renders
-  // =================================
+  // =========================================
+  // Highlight clauses inside PDF
+  // =========================================
 
   useEffect(() => {
     if (
@@ -272,146 +258,128 @@ function App() {
     }
 
     const timer = setTimeout(() => {
-      const clauses =
-        result.review?.clauses || [];
+      const clauses = result.review?.clauses || [];
 
-      document
-        .querySelectorAll(".pdf-page")
-        .forEach((pageElement, pageIndex) => {
-          const pageNumber =
-            pageIndex + 1;
+      const pages = document.querySelectorAll(".pdf-page");
 
-          const pageClauses =
-            clauses.filter(
-              (clause) =>
-                Number(clause.page) ===
-                pageNumber
-            );
+      pages.forEach((pageElement, pageIndex) => {
+        const pageNumber = pageIndex + 1;
 
-          const textSpans =
-            Array.from(
-              pageElement.querySelectorAll(
-                ".react-pdf__Page__textContent span"
-              )
-            );
+        const pageClauses = clauses.filter(
+          (clause) =>
+            Number(clause.page) === pageNumber
+        );
 
-          if (!textSpans.length) {
+        const textSpans = Array.from(
+          pageElement.querySelectorAll(
+            ".react-pdf__Page__textContent span"
+          )
+        );
+
+        if (!textSpans.length) {
+          return;
+        }
+
+
+        // Remove old highlights
+
+        textSpans.forEach((span) => {
+          span.classList.remove(
+            "clause-highlight",
+            "severity-high",
+            "severity-medium",
+            "severity-low"
+          );
+
+          span.removeAttribute("data-clause-index");
+        });
+
+
+        // Process each clause
+
+        pageClauses.forEach((clause) => {
+          const clauseText = normalizeText(
+            clause.original
+          );
+
+          if (!clauseText) {
             return;
           }
 
 
-          // Reset previous highlights
+          // Build combined text
+
+          let combinedText = "";
+
+          const ranges = [];
 
           textSpans.forEach((span) => {
-            span.classList.remove(
-              "clause-highlight",
-              "severity-high",
-              "severity-medium",
-              "severity-low"
+            const text = normalizeText(
+              span.textContent
             );
 
-            span.removeAttribute(
-              "data-clause-index"
-            );
+            if (!text) {
+              return;
+            }
+
+            if (combinedText.length > 0) {
+              combinedText += " ";
+            }
+
+            const start = combinedText.length;
+
+            combinedText += text;
+
+            const end = combinedText.length;
+
+            ranges.push({
+              span,
+              start,
+              end,
+            });
           });
 
 
-          // Process every clause on this page
+          // Find clause
 
-          pageClauses.forEach((clause) => {
-            const clauseText =
-              normalizeText(
-                clause.original
-              );
+          const startIndex =
+            combinedText.indexOf(clauseText);
 
-            if (!clauseText) {
+          if (startIndex === -1) {
+            return;
+          }
+
+          const endIndex =
+            startIndex + clauseText.length;
+
+          const clauseIndex =
+            clauses.indexOf(clause);
+
+
+          // Highlight matching spans
+
+          ranges.forEach((range) => {
+            const overlaps =
+              range.end > startIndex &&
+              range.start < endIndex;
+
+            if (!overlaps) {
               return;
             }
 
+            range.span.classList.add(
+              "clause-highlight"
+            );
 
-            // Build combined PDF text
+            range.span.classList.add(
+              getSeverityClass(clause.severity)
+            );
 
-            let combinedText = "";
-
-            const ranges = [];
-
-            textSpans.forEach((span) => {
-              const text =
-                normalizeText(
-                  span.textContent
-                );
-
-              if (!text) {
-                return;
-              }
-
-              const start =
-                combinedText.length;
-
-              if (combinedText.length > 0) {
-                combinedText += " ";
-              }
-
-              combinedText += text;
-
-              const end =
-                combinedText.length;
-
-              ranges.push({
-                span,
-                start,
-                end,
-              });
-            });
-
-
-            // Find clause in PDF text
-
-            const startIndex =
-              combinedText.indexOf(
-                clauseText
-              );
-
-            if (startIndex === -1) {
-              return;
-            }
-
-            const endIndex =
-              startIndex +
-              clauseText.length;
-
-            const clauseIndex =
-              clauses.indexOf(clause);
-
-
-            // Highlight matching spans
-
-            ranges.forEach((range) => {
-              const overlaps =
-                range.end >
-                  startIndex &&
-                range.start <
-                  endIndex;
-
-              if (!overlaps) {
-                return;
-              }
-
-              range.span.classList.add(
-                "clause-highlight"
-              );
-
-              range.span.classList.add(
-                getSeverityClass(
-                  clause.severity
-                )
-              );
-
-              range.span.dataset.clauseIndex =
-                String(clauseIndex);
-            });
+            range.span.dataset.clauseIndex =
+              String(clauseIndex);
           });
         });
+      });
     }, 500);
 
     return () => {
@@ -420,15 +388,12 @@ function App() {
   }, [result, viewMode, numPages]);
 
 
-  // =================================
-  // PDF highlight click
-  // =================================
+  // =========================================
+  // Click highlighted clause
+  // =========================================
 
   const handlePdfClick = (event) => {
     let element = event.target;
-
-    // Walk upward through the clicked element's
-    // parents until we find the highlighted span.
 
     while (
       element &&
@@ -459,18 +424,19 @@ function App() {
   };
 
 
-  // =================================
-  // RENDER
-  // =================================
+  // =========================================
+  // Render
+  // =========================================
 
   return (
     <div className="app">
 
       <div className="container">
 
-        {/* =================================
+
+        {/* =====================================
             HEADER
-            ================================= */}
+            ===================================== */}
 
         <header className="header">
 
@@ -486,20 +452,22 @@ function App() {
 
           </div>
 
+
           <p className="tagline">
             Understand what your contract
             actually says.
           </p>
 
+
           <button
             className="theme-toggle"
             onClick={toggleTheme}
             aria-label="Toggle theme"
-            title={`Switch to ${
+            title={
               theme === "light"
-                ? "dark"
-                : "light"
-            } mode`}
+                ? "Switch to dark mode"
+                : "Switch to light mode"
+            }
           >
 
             <div
@@ -521,6 +489,7 @@ function App() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
+
                 <circle
                   cx="12"
                   cy="12"
@@ -582,6 +551,7 @@ function App() {
                   x2="19.78"
                   y2="4.22"
                 />
+
               </svg>
 
             </div>
@@ -606,7 +576,9 @@ function App() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
+
                 <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+
               </svg>
 
             </div>
@@ -616,9 +588,9 @@ function App() {
         </header>
 
 
-        {/* =================================
+        {/* =====================================
             UPLOAD
-            ================================= */}
+            ===================================== */}
 
         {!result && (
 
@@ -630,16 +602,15 @@ function App() {
                 DOCUMENT REVIEW
               </div>
 
-              <h1 className="upload-title">
 
+              <h1 className="upload-title">
                 Find the clauses
                 <br />
-
                 <span>
                   you shouldn't overlook.
                 </span>
-
               </h1>
+
 
               <p className="upload-description">
                 Upload a legal document and
@@ -654,13 +625,9 @@ function App() {
 
             <label
               className={`upload-area ${
-                isDragging
-                  ? "dragging"
-                  : ""
+                isDragging ? "dragging" : ""
               } ${
-                file
-                  ? "file-selected"
-                  : ""
+                file ? "file-selected" : ""
               }`}
 
               onDragOver={(event) => {
@@ -681,19 +648,15 @@ function App() {
               <div className="upload-text">
 
                 <div className="upload-main-text">
-
                   {file
                     ? file.name
                     : "Drag & drop your PDF here"}
-
                 </div>
 
                 <div className="upload-subtext">
-
                   {file
                     ? "PDF selected and ready for review"
                     : "or choose a file from your computer"}
-
                 </div>
 
               </div>
@@ -709,7 +672,6 @@ function App() {
                   type="file"
                   accept=".pdf,application/pdf"
                   disabled={loading}
-
                   onChange={(event) => {
                     handleFile(
                       event.target.files[0]
@@ -725,7 +687,7 @@ function App() {
             <button
               className="review-button"
               onClick={reviewPDF}
-              disabled={loading}
+              disabled={loading || !file}
             >
               {loading
                 ? "Reviewing document..."
@@ -751,9 +713,7 @@ function App() {
 
 
                 <div className="progress-track">
-
                   <div className="progress-indicator" />
-
                 </div>
 
 
@@ -772,9 +732,9 @@ function App() {
         )}
 
 
-        {/* =================================
+        {/* =====================================
             RESULTS
-            ================================= */}
+            ===================================== */}
 
         {result?.review?.clauses && (
 
@@ -796,11 +756,7 @@ function App() {
 
 
               <div className="results-count">
-
-                {result.review.clauses.length}
-                {" "}
-                clauses identified
-
+                {result.review.clauses.length} clauses identified
               </div>
 
             </div>
@@ -829,7 +785,7 @@ function App() {
             </div>
 
 
-            {/* View Toggle */}
+            {/* View toggle */}
 
             <div className="view-toggle">
 
@@ -839,7 +795,6 @@ function App() {
                     ? "view-button active"
                     : "view-button"
                 }
-
                 onClick={() => {
                   setViewMode("document");
                   setSelectedClause(null);
@@ -855,7 +810,6 @@ function App() {
                     ? "view-button active"
                     : "view-button"
                 }
-
                 onClick={() => {
                   setViewMode("clauses");
                   setSelectedClause(null);
@@ -868,7 +822,7 @@ function App() {
 
 
             {/* =================================
-                PDF VIEW
+                DOCUMENT VIEW
                 ================================= */}
 
             <div
@@ -961,6 +915,7 @@ function App() {
                     onClick={() => {
                       setSelectedClause(null);
                     }}
+                    aria-label="Close clause details"
                   >
                     ×
                   </button>
@@ -1027,7 +982,9 @@ function App() {
                 (clause, index) => (
 
                   <article
-                    className="clause-card"
+                    className={`clause-card ${getSeverityClass(
+                      clause.severity
+                    )}`}
                     key={index}
                   >
 
@@ -1036,9 +993,7 @@ function App() {
                       <div className="clause-title-row">
 
                         <span className="clause-number">
-                          {String(
-                            index + 1
-                          ).padStart(2, "0")}
+                          {String(index + 1).padStart(2, "0")}
                         </span>
 
                         <h3 className="clause-type">
